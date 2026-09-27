@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="screen" x1="28" y1="50" x2="89" y2="85" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#73BFC4"/>
+      <stop offset=".52" stop-color="#8C6BFF"/>
+      <stop offset="1" stop-color="#FF810A"/>
+    </linearGradient>
+    <clipPath id="screen-clip"><rect x="28" y="49" width="62" height="39" rx="5"/></clipPath>
+  </defs>
+  <rect x="24" y="27" width="84" height="77" rx="9" fill="#080807"/>
+  <rect x="16" y="19" width="84" height="77" rx="9" fill="#FFE457" stroke="#080807" stroke-width="4"/>
+  <path d="M18 42h80" stroke="#080807" stroke-width="4"/>
+  <circle cx="27" cy="31" r="2.5" fill="#FF82C2" stroke="#080807" stroke-width="1.5"/>
+  <circle cx="36" cy="31" r="2.5" fill="#73BFC4" stroke="#080807" stroke-width="1.5"/>
+  <circle cx="45" cy="31" r="2.5" fill="#8C6BFF" stroke="#080807" stroke-width="1.5"/>
+  <rect x="28" y="49" width="62" height="39" rx="5" fill="url(#screen)" stroke="#080807" stroke-width="3"/>
+  <g clip-path="url(#screen-clip)">
+    <path d="M28 81 45 63l10 10 9-8 26 24H28z" fill="#FFE457"/>
+    <path d="M57 49h33v39H57z" fill="#FF82C2" fill-opacity=".34"/>
+    <circle cx="76" cy="60" r="5" fill="#F4F0E5"/>
+  </g>
+  <path d="m94 48 2.1 5.9L102 56l-5.9 2.1L94 64l-2.1-5.9L86 56l5.9-2.1L94 48Z" fill="#FF82C2" stroke="#080807" stroke-width="2" stroke-linejoin="round"/>
+</svg>
