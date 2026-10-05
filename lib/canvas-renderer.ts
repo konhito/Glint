@@ -73,8 +73,8 @@ function drawMesh(ctx: CanvasRenderingContext2D, colors: string[], width: number
 
 function drawBackground(ctx: CanvasRenderingContext2D, state: EditorState, backgroundImage: HTMLImageElement | null, backgroundSceneCanvas: HTMLCanvasElement | null, width: number, height: number, time: number, pointer: Pointer) {
   const preset = state.gradientId === "custom" ? { kind: "linear" as const, colors: state.customGradientColors } : GRADIENTS.find((item) => item.id === state.gradientId) ?? GRADIENTS[0];
-  if (state.backgroundMode === "shader" || state.backgroundMode === "blob" || state.backgroundMode === "saved-mesh") {
-    ctx.fillStyle = state.backgroundMode === "blob" ? "#22ff7e" : state.backgroundMode === "saved-mesh" ? "#15131b" : "#10191c";
+  if (state.backgroundMode === "shader" || state.backgroundMode === "blob" || state.backgroundMode === "saved-mesh" || state.backgroundMode === "generated-mesh") {
+    ctx.fillStyle = state.backgroundMode === "blob" ? "#22ff7e" : state.backgroundMode === "generated-mesh" ? state.generatedMeshDesign?.colors[0] ?? "#15131b" : state.backgroundMode === "saved-mesh" ? "#15131b" : "#10191c";
     ctx.fillRect(0, 0, width, height);
     if (backgroundSceneCanvas?.width && backgroundSceneCanvas.height) ctx.drawImage(backgroundSceneCanvas, 0, 0, width, height);
   } else if (state.backgroundMode === "solid") {

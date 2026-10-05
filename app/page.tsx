@@ -11,10 +11,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cssForGradient, GRADIENTS, MOODS, OUTPUT_PRESETS } from "@/lib/gradients";
-import { rankGradientsForMedia } from "@/lib/gradient-match";
+import { generateMeshDesignForMedia, rankGradientsForMedia } from "@/lib/gradient-match";
 import { EXPORT_PIXEL_RATIO, renderCanvas } from "@/lib/canvas-renderer";
 import { DEFAULT_EDITOR, useEditorStore, type EditorState, type WindowFrame } from "@/lib/editor-store";
-import { MESH_GRADIENT_STORAGE_KEY, readSavedMeshGradients, type SavedMeshGradient } from "@/lib/mesh-designs";
+import { isMeshGradientDesign, MESH_GRADIENT_STORAGE_KEY, readSavedMeshGradients, type SavedMeshGradient } from "@/lib/mesh-designs";
 import { recordCanvasVideo } from "@/lib/video-export";
 import { renderCanvasGif } from "@/lib/gif-export";
 
@@ -123,6 +123,7 @@ export default function Home() {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const backgroundRef = useRef<HTMLImageElement | null>(null);
   const pointerRef = useRef({ x: 0.5, y: 0.5 });
+  const smartShuffleCountRef = useRef(0);
   const sourceObjectUrl = useRef("");
   const pickerRef = useRef<HTMLInputElement>(null);
   const backgroundPickerRef = useRef<HTMLInputElement>(null);
@@ -156,7 +157,8 @@ export default function Home() {
   const emptyStageBackground = state.backgroundMode === "solid" ? state.solidColor
     : state.backgroundMode === "image" && state.backgroundImageUrl ? `url("${state.backgroundImageUrl}") center / cover`
     : state.backgroundMode === "gradient" ? backgroundGradientCss
-      : state.backgroundMode === "mesh" ? state.motionPreset === "silk" ? "#070809" : activeGradient.colors[0] : undefined;
+      : state.backgroundMode === "mesh" ? state.motionPreset === "silk" ? "#070809" : activeGradient.colors[0]
+        : state.backgroundMode === "generated-mesh" ? state.generatedMeshDesign?.colors[0] : undefined;
   const gradientColorA = state.gradientId === "custom" ? state.customGradientColors[0] : activeGradient.colors[0];
   const gradientColorB = state.gradientId === "custom" ? state.customGradientColors[1] : activeGradient.colors[activeGradient.colors.length - 1];
   const update = <K extends keyof EditorState>(key: K, value: EditorState[K]) => {
@@ -313,18 +315,24 @@ export default function Home() {
     rendersRef.current.forEach((item) => URL.revokeObjectURL(item.url));
   }, []);
 
+  function newMediaSettings() {
+    const backgroundMode = useEditorStore.getState().backgroundMode;
+    return { scale: DEFAULT_EDITOR.scale, generatedMeshDesign: null, backgroundMode: backgroundMode === "generated-mesh" ? "gradient" as const : backgroundMode };
+  }
+
   async function loadFile(file: File) {
     if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return notify("Choose an image or video file.");
     if (file.type.startsWith("image/") && file.size > 80 * 1024 * 1024) return notify("Images need to be smaller than 80 MB.");
     if (file.type.startsWith("video/") && file.size > 300 * 1024 * 1024) return notify("Videos need to be smaller than 300 MB.");
     clearRenders();
+    smartShuffleCountRef.current = 0;
     try {
       if (file.type.startsWith("video/")) {
         if (sourceObjectUrl.current) URL.revokeObjectURL(sourceObjectUrl.current);
         const url = URL.createObjectURL(file);
         sourceObjectUrl.current = url;
         imageRef.current = null;
-        useEditorStore.setState({ sourceUrl: url, sourceKind: "video", sourceName: file.name, sourceDuration: 0, scale: DEFAULT_EDITOR.scale });
+        useEditorStore.setState({ ...newMediaSettings(), sourceUrl: url, sourceKind: "video", sourceName: file.name, sourceDuration: 0 });
         setVideoPaused(true);
       } else {
         const dataUrl = await readAsDataUrl(file);
@@ -343,7 +351,7 @@ export default function Home() {
         imageRef.current = finalUrl === dataUrl ? image : await imageFromUrl(finalUrl);
         if (sourceObjectUrl.current) URL.revokeObjectURL(sourceObjectUrl.current);
         sourceObjectUrl.current = "";
-        useEditorStore.setState({ sourceUrl: finalUrl, sourceKind: "image", sourceName: file.name, sourceDuration: 0, scale: DEFAULT_EDITOR.scale });
+        useEditorStore.setState({ ...newMediaSettings(), sourceUrl: finalUrl, sourceKind: "image", sourceName: file.name, sourceDuration: 0 });
       }
       notify("Added to your canvas — your file stays on this device.");
     } catch (error) {
@@ -355,8 +363,9 @@ export default function Home() {
     try {
       const image = await imageFromUrl("/sample-screen.svg");
       clearRenders();
+      smartShuffleCountRef.current = 0;
       imageRef.current = image;
-      useEditorStore.setState({ sourceUrl: "/sample-screen.svg", sourceKind: "image", sourceName: "sample-screen.svg", sourceDuration: 0, scale: DEFAULT_EDITOR.scale });
+      useEditorStore.setState({ ...newMediaSettings(), sourceUrl: "/sample-screen.svg", sourceKind: "image", sourceName: "sample-screen.svg", sourceDuration: 0 });
       notify("Demo screenshot added.");
     } catch {
       notify("Could not load the demo image.");
@@ -474,11 +483,19 @@ export default function Home() {
   function shuffleDesign() {
     const source = state.sourceKind === "video" ? videoRef.current : imageRef.current;
     if (!source) return notify("Wait for your media to load before shuffling.");
-    const gradients = rankGradientsForMedia(source, GRADIENTS).slice(0, 6);
-    if (!gradients.length) return notify("Could not read colors from this media yet.");
-    const currentIndex = gradients.findIndex((gradient) => gradient.id === state.gradientId);
+    const match = rankGradientsForMedia(source, GRADIENTS);
+    if (!match) return notify("Could not read colors from this media yet.");
+    const step = smartShuffleCountRef.current++;
     const availablePatterns = shufflePatterns.filter((pattern) => pattern !== state.pattern);
-    chooseGradient(gradients[(currentIndex + 1) % gradients.length].id);
+    if (step % 3 === 0) {
+      const design = generateMeshDesignForMedia(match, Math.floor(step / 3));
+      useEditorStore.setState({ generatedMeshDesign: design, backgroundMode: "generated-mesh", savedMeshDesignId: "", motionEnabled: true, motionSpeed: Math.round(design.speed * 100) });
+    } else {
+      const choices = match.ranked.slice(0, 6);
+      const currentIndex = choices.findIndex((gradient) => gradient.id === state.gradientId);
+      chooseGradient(choices[(currentIndex + 1) % choices.length].id);
+    }
+    update("grain", match.grain);
     update("pattern", availablePatterns[Math.floor(Math.random() * availablePatterns.length)]);
     update("patternSeed", state.patternSeed + Math.floor(Math.random() * 10) + 1);
   }
@@ -509,13 +526,16 @@ export default function Home() {
   function loadEditorDesign(entry: SavedEditorDesign) {
     const current = useEditorStore.getState();
     const savedMeshDesignId = entry.settings.savedMeshDesignId ?? "";
+    const generatedMeshDesign = isMeshGradientDesign(entry.settings.generatedMeshDesign) ? entry.settings.generatedMeshDesign : null;
     const hasSavedMesh = savedMeshGradients.some((item) => item.id === savedMeshDesignId);
     const backgroundMode = entry.settings.backgroundMode === "image" && !current.backgroundImageUrl
       ? "gradient"
       : entry.settings.backgroundMode === "saved-mesh" && !hasSavedMesh
         ? "gradient"
+        : entry.settings.backgroundMode === "generated-mesh" && !generatedMeshDesign
+          ? "gradient"
         : entry.settings.backgroundMode;
-    useEditorStore.setState({ ...entry.settings, savedMeshDesignId: backgroundMode === "saved-mesh" ? savedMeshDesignId : "", sourceUrl: current.sourceUrl, sourceKind: current.sourceKind, sourceName: current.sourceName, sourceDuration: current.sourceDuration, backgroundImageUrl: current.backgroundImageUrl, backgroundMode });
+    useEditorStore.setState({ ...entry.settings, savedMeshDesignId: backgroundMode === "saved-mesh" ? savedMeshDesignId : "", generatedMeshDesign, sourceUrl: current.sourceUrl, sourceKind: current.sourceKind, sourceName: current.sourceName, sourceDuration: current.sourceDuration, backgroundImageUrl: current.backgroundImageUrl, backgroundMode });
     notify(entry.sourceName === current.sourceName ? "Design settings applied." : "Style applied. Add the original media again if needed.");
   }
 
@@ -585,6 +605,7 @@ export default function Home() {
                   {state.backgroundMode === "shader" && <ShaderBackground animate={state.motionEnabled ? "on" : "off"} />}
                   {state.backgroundMode === "blob" && <BlobBackground animate={state.motionEnabled} />}
                   {state.backgroundMode === "saved-mesh" && activeSavedMesh && <MeshGradientBackground design={activeSavedMesh.design} speed={state.motionEnabled ? state.motionSpeed / 100 : 0} />}
+                  {state.backgroundMode === "generated-mesh" && state.generatedMeshDesign && <MeshGradientBackground design={state.generatedMeshDesign} speed={state.motionEnabled ? state.motionSpeed / 100 : 0} />}
                 </div>
                 <canvas ref={canvasRef} className="canvas-artboard" aria-label="Live screenshot composition" onPointerMove={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect();
@@ -603,6 +624,7 @@ export default function Home() {
                 {state.backgroundMode === "shader" && <ShaderBackground animate={state.motionEnabled ? "on" : "off"} />}
                 {state.backgroundMode === "blob" && <BlobBackground animate={state.motionEnabled} />}
                 {state.backgroundMode === "saved-mesh" && activeSavedMesh && <MeshGradientBackground design={activeSavedMesh.design} speed={state.motionEnabled ? state.motionSpeed / 100 : 0} />}
+                {state.backgroundMode === "generated-mesh" && state.generatedMeshDesign && <MeshGradientBackground design={state.generatedMeshDesign} speed={state.motionEnabled ? state.motionSpeed / 100 : 0} />}
               </div>
               <section className="upload-empty-state" aria-labelledby="upload-empty-title">
                 <header className="upload-empty-heading">
@@ -684,8 +706,8 @@ export default function Home() {
                   </details>
                   <div className="panel-title-row"><span className="panel-title">Background</span><span className="panel-overline">{state.backgroundMode}</span></div>
                   <button ref={backgroundPickerTriggerRef} type="button" className="background-picker-trigger" aria-haspopup="dialog" aria-expanded={backgroundPickerOpen} aria-controls="background-picker-panel" onClick={openBackgroundPicker}>
-                    <span className="background-picker-thumb" style={{ background: state.backgroundMode === "shader" ? "linear-gradient(135deg, #73bfc4, #ff810a, #8da0ce)" : state.backgroundMode === "blob" ? "radial-gradient(circle at 50% 50%, #2cb978 0 36%, #22ff7e 70%)" : state.backgroundMode === "mesh" && state.motionPreset === "silk" ? "linear-gradient(130deg, #050505 9%, #d8d8d8 20%, #151515 29% 38%, #aaa 45%, #090909 55% 66%, #ddd 75%, #080808 88%)" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? `linear-gradient(135deg, ${activeSavedMesh.design.colors.join(", ")})` : state.backgroundMode === "solid" ? state.solidColor : state.backgroundMode === "image" && state.backgroundImageUrl ? `url(${state.backgroundImageUrl}) center / cover` : backgroundGradientCss }} />
-                    <span className="background-picker-copy"><strong>Choose a background</strong><small>{state.backgroundMode === "shader" ? "Shader sphere · live motion" : state.backgroundMode === "blob" ? "Living blob · live motion" : state.backgroundMode === "mesh" && state.motionPreset === "silk" ? "Mono silk · live motion" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? activeSavedMesh.name : state.backgroundMode === "image" ? "Custom image" : state.backgroundMode === "solid" ? state.solidColor : state.gradientId === "custom" ? "Custom gradient" : activeGradient.name}</small></span><ChevronDown size={14} />
+                    <span className="background-picker-thumb" style={{ background: state.backgroundMode === "shader" ? "linear-gradient(135deg, #73bfc4, #ff810a, #8da0ce)" : state.backgroundMode === "blob" ? "radial-gradient(circle at 50% 50%, #2cb978 0 36%, #22ff7e 70%)" : state.backgroundMode === "mesh" && state.motionPreset === "silk" ? "linear-gradient(130deg, #050505 9%, #d8d8d8 20%, #151515 29% 38%, #aaa 45%, #090909 55% 66%, #ddd 75%, #080808 88%)" : state.backgroundMode === "generated-mesh" && state.generatedMeshDesign ? `linear-gradient(135deg, ${state.generatedMeshDesign.colors.join(", ")})` : state.backgroundMode === "saved-mesh" && activeSavedMesh ? `linear-gradient(135deg, ${activeSavedMesh.design.colors.join(", ")})` : state.backgroundMode === "solid" ? state.solidColor : state.backgroundMode === "image" && state.backgroundImageUrl ? `url(${state.backgroundImageUrl}) center / cover` : backgroundGradientCss }} />
+                    <span className="background-picker-copy"><strong>Choose a background</strong><small>{state.backgroundMode === "shader" ? "Shader sphere · live motion" : state.backgroundMode === "blob" ? "Living blob · live motion" : state.backgroundMode === "mesh" && state.motionPreset === "silk" ? "Mono silk · live motion" : state.backgroundMode === "generated-mesh" ? "Media matched mesh · live motion" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? activeSavedMesh.name : state.backgroundMode === "image" ? "Custom image" : state.backgroundMode === "solid" ? state.solidColor : state.gradientId === "custom" ? "Custom gradient" : activeGradient.name}</small></span><ChevronDown size={14} />
                   </button>
                 </>}
 
@@ -696,6 +718,7 @@ export default function Home() {
                     <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "shader"} onClick={() => useEditorStore.setState({ backgroundMode: "shader", savedMeshDesignId: "", motionEnabled: true })}><span className="motion-swatch shader-sphere" /><strong>Shader sphere</strong><small>Teal · orange · periwinkle</small></button>
                     <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "blob"} onClick={() => useEditorStore.setState({ backgroundMode: "blob", savedMeshDesignId: "", motionEnabled: true })}><span className="motion-swatch green-blob" /><strong>Green blob</strong><small>Noise-deformed Perlin sphere</small></button>
                     <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "mesh" && state.motionPreset === "silk"} onClick={() => { useEditorStore.setState({ motionPreset: "silk", backgroundMode: "mesh", savedMeshDesignId: "", motionEnabled: true }); }}><span className="motion-swatch silk" /><strong>Mono silk</strong><small>Black, silver &amp; flowing light</small></button>
+                    {state.generatedMeshDesign && <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "generated-mesh"} onClick={() => useEditorStore.setState({ backgroundMode: "generated-mesh", savedMeshDesignId: "", motionEnabled: true })}><span className="motion-swatch saved-mesh-swatch" style={{ background: `linear-gradient(135deg, ${state.generatedMeshDesign.colors.join(", ")})` }} /><strong>Media matched mesh</strong><small>Generated for this media</small></button>}
                   </div>
                   <div className="panel-divider">Mesh Lab designs</div>
                   {savedMeshGradients.length > 0 ? <div className="motion-grid saved-motion-grid">{savedMeshGradients.map((entry) => <button key={entry.id} className="motion-card" type="button" aria-pressed={state.backgroundMode === "saved-mesh" && state.savedMeshDesignId === entry.id} onClick={() => applySavedMeshGradient(entry)}><span className="motion-swatch saved-mesh-swatch" style={{ background: `linear-gradient(135deg, ${entry.design.colors.join(", ")})` }} /><strong>{entry.name}</strong><small>Mesh Lab · {entry.design.colors.length} colors</small></button>)}</div> : <div className="saved-mesh-empty"><p className="small-note">Save a mesh gradient to use it as a motion background.</p><a href="/mesh-gradient-builder"><Sparkles size={13} /> Open Mesh Lab</a></div>}

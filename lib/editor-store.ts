@@ -1,6 +1,7 @@
 import { create } from "zustand";
+import type { MeshGradientDesign } from "@/lib/mesh-designs";
 
-export type BackgroundMode = "gradient" | "mesh" | "solid" | "image" | "shader" | "blob" | "saved-mesh";
+export type BackgroundMode = "gradient" | "mesh" | "solid" | "image" | "shader" | "blob" | "saved-mesh" | "generated-mesh";
 export type BackgroundEffect = "none" | "blur-vignette" | "soft-glow";
 export type WindowFrame =
   | "none" | "arc" | "stack-light" | "stack-dark" | "mac-light" | "mac-dark"
@@ -21,6 +22,7 @@ export type EditorState = {
   backgroundEffect: BackgroundEffect;
   backgroundImageUrl: string;
   savedMeshDesignId: string;
+  generatedMeshDesign: MeshGradientDesign | null;
   solidColor: string;
   gradientId: string;
   gradientAngle: number;
@@ -66,6 +68,7 @@ export const DEFAULT_EDITOR: EditorState = {
   backgroundEffect: "none",
   backgroundImageUrl: "",
   savedMeshDesignId: "",
+  generatedMeshDesign: null,
   solidColor: "#7861ee",
   gradientId: "mesh-1",
   gradientAngle: 135,
