@@ -20,6 +20,7 @@ type BackgroundPickerTab = "Looks" | "Gradient" | "Solid" | "Image" | "Unsplash"
 type VideoRender = { name: string; url: string; size: string; extension: string };
 type SavedEditorDesign = { id: string; name: string; sourceName: string; settings: Omit<EditorState, "sourceUrl" | "sourceName" | "sourceKind" | "sourceDuration" | "backgroundImageUrl"> };
 
+const inspectorTabs: InspectorTab[] = ["Edit", "Effects", "Motion", "Saved"];
 const EDITOR_DESIGNS_KEY = "neo.screenshot-designs.v1";
 
 function readSavedEditorDesigns(): SavedEditorDesign[] {
@@ -161,6 +162,18 @@ export default function Home() {
     else return;
     event.preventDefault();
     useEditorStore.setState({ tiltX: Math.max(-18, Math.min(18, tiltX)), tiltY: Math.max(-18, Math.min(18, tiltY)) });
+  };
+  const handleInspectorTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, current: InspectorTab) => {
+    let nextIndex = inspectorTabs.indexOf(current);
+    if (event.key === "ArrowRight") nextIndex = (nextIndex + 1) % inspectorTabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (nextIndex - 1 + inspectorTabs.length) % inspectorTabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = inspectorTabs.length - 1;
+    else return;
+    event.preventDefault();
+    const next = inspectorTabs[nextIndex];
+    setTab(next);
+    document.getElementById(`editor-tab-${next.toLowerCase()}`)?.focus();
   };
   const updateGradientColor = (index: 0 | 1, color: string) => {
     const colors: [string, string] = state.gradientId === "custom" ? [state.customGradientColors[0], state.customGradientColors[1]] : [gradientColorA, gradientColorB];
@@ -537,9 +550,9 @@ export default function Home() {
 
         <aside className="inspector" aria-label="Editor controls">
           <nav className="inspector-tabs" role="tablist" aria-label="Editor sections">
-            {(["Edit", "Effects", "Motion", "Saved"] as InspectorTab[]).map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} className="inspector-tab" onClick={() => setTab(item)}>{item === "Edit" ? <SlidersHorizontal size={13} /> : item === "Motion" ? <Film size={13} /> : item === "Effects" ? <WandSparkles size={13} /> : <BookmarkPlus size={13} />}{item}</button>)}
+            {inspectorTabs.map((item) => <button key={item} id={`editor-tab-${item.toLowerCase()}`} type="button" role="tab" aria-selected={tab === item} aria-controls="editor-tabpanel" tabIndex={tab === item ? 0 : -1} className="inspector-tab" onClick={() => setTab(item)} onKeyDown={(event) => handleInspectorTabKeyDown(event, item)}>{item === "Edit" ? <SlidersHorizontal size={13} /> : item === "Motion" ? <Film size={13} /> : item === "Effects" ? <WandSparkles size={13} /> : <BookmarkPlus size={13} />}{item}</button>)}
           </nav>
-          <div className="inspector-scroll">
+          <div id="editor-tabpanel" className="inspector-scroll" role="tabpanel" aria-labelledby={`editor-tab-${tab.toLowerCase()}`} tabIndex={0}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div key={tab} className="inspector-content" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={{ duration: 0.16 }}>
                 {tab === "Edit" && <>
