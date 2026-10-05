@@ -50,6 +50,7 @@ const frames: { id: WindowFrame; label: string }[] = [
 ];
 
 const patterns = ["none", "circles", "waves", "dots", "harmony", "grid", "sight", "chimes", "diamonds", "confetti", "atmosphere"] as const;
+const shufflePatterns: EditorState["pattern"][] = ["waves", "dots", "harmony", "grid", "sight", "chimes"];
 const backgroundEffects = [{ id: "none", title: "Clean", description: "Keep the backdrop crisp" }, { id: "blur-vignette", title: "Blur vignette", description: "Soft blur, feathered edges" }, { id: "soft-glow", title: "Soft glow", description: "Color bloom behind media" }] as const;
 const positions = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
 const gradientDirections = [{ label: "Up", icon: "↑", angle: 0 }, { label: "Up right", icon: "↗", angle: 45 }, { label: "Right", icon: "→", angle: 90 }, { label: "Down right", icon: "↘", angle: 135 }, { label: "Down", icon: "↓", angle: 180 }, { label: "Down left", icon: "↙", angle: 225 }, { label: "Left", icon: "←", angle: 270 }, { label: "Up left", icon: "↖", angle: 315 }] as const;
@@ -469,6 +470,14 @@ export default function Home() {
     update("motionPreset", "aurora");
   }
 
+  function shuffleDesign() {
+    const gradients = GRADIENTS.filter((gradient) => gradient.id !== state.gradientId);
+    const availablePatterns = shufflePatterns.filter((pattern) => pattern !== state.pattern);
+    chooseGradient(gradients[Math.floor(Math.random() * gradients.length)].id);
+    update("pattern", availablePatterns[Math.floor(Math.random() * availablePatterns.length)]);
+    update("patternSeed", state.patternSeed + Math.floor(Math.random() * 10) + 1);
+  }
+
   function applySavedMeshGradient(entry: SavedMeshGradient) {
     useEditorStore.setState({
       savedMeshDesignId: entry.id,
@@ -559,7 +568,7 @@ export default function Home() {
             </div>
             {state.sourceUrl && <div className="toolbar-actions">
               <Button variant="secondary" size="sm" onClick={() => pickerRef.current?.click()}><Plus size={14} /> Add media</Button>
-              <Button variant="default" size="sm" onClick={() => chooseGradient(GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)].id)}><WandSparkles size={14} /> Shuffle</Button>
+              <Button variant="default" size="sm" onClick={shuffleDesign}><WandSparkles size={14} /> Shuffle</Button>
             </div>}
           </div>
 
