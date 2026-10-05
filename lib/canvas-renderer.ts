@@ -103,7 +103,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, state: EditorState, backg
   // Motion is a background layer, even when the user picked a photo as the base.
   if (state.motionEnabled && (state.backgroundMode === "image" || state.backgroundMode === "solid" || (state.backgroundMode === "gradient" && preset.kind !== "mesh"))) {
     ctx.save();
-    ctx.globalAlpha = state.backgroundMode === "image" ? 0.52 : 0.75;
+    ctx.globalAlpha = state.backgroundMode === "image" ? 0.52 : state.backgroundMode === "gradient" ? 0.28 : 0.75;
     drawMesh(ctx, preset.colors, width, height, state, time, pointer, true);
     ctx.restore();
   }

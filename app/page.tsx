@@ -115,6 +115,7 @@ function RangeControl({ label, value, min, max, suffix = "", onChange }: {
 export default function Home() {
   const state = useEditorStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const emptyCanvasRef = useRef<HTMLCanvasElement>(null);
   const backgroundSceneRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -147,10 +148,13 @@ export default function Home() {
   const looks = useMemo(() => allLooks ? GRADIENTS : GRADIENTS.filter((gradient) => gradient.mood === state.mood), [allLooks, state.mood]);
   const activeGradient = GRADIENTS.find((item) => item.id === state.gradientId) ?? GRADIENTS[0];
   const activeSavedMesh = savedMeshGradients.find((item) => item.id === state.savedMeshDesignId);
-  const backgroundGradientCss = state.gradientId === "custom" ? `linear-gradient(${state.gradientAngle}deg, ${state.customGradientColors.join(", ")})` : cssForGradient(activeGradient);
+  const backgroundGradientCss = state.gradientId === "custom" || activeGradient.kind === "linear"
+    ? `linear-gradient(${state.gradientAngle}deg, ${(state.gradientId === "custom" ? state.customGradientColors : activeGradient.colors).join(", ")})`
+    : cssForGradient(activeGradient);
   const emptyStageBackground = state.backgroundMode === "solid" ? state.solidColor
     : state.backgroundMode === "image" && state.backgroundImageUrl ? `url("${state.backgroundImageUrl}") center / cover`
-      : state.backgroundMode === "gradient" || state.backgroundMode === "mesh" ? backgroundGradientCss : undefined;
+    : state.backgroundMode === "gradient" ? backgroundGradientCss
+      : state.backgroundMode === "mesh" ? state.motionPreset === "silk" ? "#070809" : activeGradient.colors[0] : undefined;
   const gradientColorA = state.gradientId === "custom" ? state.customGradientColors[0] : activeGradient.colors[0];
   const gradientColorB = state.gradientId === "custom" ? state.customGradientColors[1] : activeGradient.colors[activeGradient.colors.length - 1];
   const update = <K extends keyof EditorState>(key: K, value: EditorState[K]) => {
@@ -211,11 +215,12 @@ export default function Home() {
   };
 
   const paint = useCallback(() => {
-    if (canvasRef.current) {
+    const previewCanvas = canvasRef.current ?? emptyCanvasRef.current;
+    if (previewCanvas) {
       const latest = useEditorStore.getState();
       const currentPreset = OUTPUT_PRESETS.find((item) => item.id === latest.outputPresetId) ?? OUTPUT_PRESETS[0];
-      const currentSource = latest.sourceKind === "video" ? videoRef.current : imageRef.current;
-      renderCanvas(canvasRef.current, latest, currentSource, backgroundRef.current, currentPreset.width, currentPreset.height, performance.now() / 1000, pointerRef.current, backgroundSceneRef.current?.querySelector("canvas") ?? null);
+      const currentSource = !latest.sourceUrl ? null : latest.sourceKind === "video" ? videoRef.current : imageRef.current;
+      renderCanvas(previewCanvas, latest, currentSource, backgroundRef.current, currentPreset.width, currentPreset.height, performance.now() / 1000, pointerRef.current, backgroundSceneRef.current?.querySelector("canvas") ?? null);
     }
   }, []);
 
@@ -254,7 +259,7 @@ export default function Home() {
   useEffect(() => {
     if (busy) return;
     paint();
-    if (!canvasRef.current) return;
+    if (!canvasRef.current && !emptyCanvasRef.current) return;
     const video = videoRef.current;
     const animate = state.motionEnabled || (state.sourceKind === "video" && video && !videoPaused);
     if (!animate) return;
@@ -579,6 +584,7 @@ export default function Home() {
               }}>{videoPaused ? <Play size={13} fill="currentColor" /> : <Pause size={13} fill="currentColor" />}</button><span>{videoRef.current?.duration ? `${Math.floor(videoRef.current.currentTime)}s / ${Math.floor(videoRef.current.duration)}s` : "video preview"}</span></div>}
               {dragging && <div className="drop-overlay">DROP YOUR FILE HERE <Upload size={22} /></div>}
             </div> : <>
+              {state.backgroundMode === "mesh" && <canvas ref={emptyCanvasRef} className="empty-canvas-artboard" aria-hidden="true" />}
               <div ref={backgroundSceneRef} className="background-scene-layer empty-background-layer" aria-hidden="true">
                 {state.backgroundMode === "shader" && <ShaderBackground animate={state.motionEnabled ? "on" : "off"} />}
                 {state.backgroundMode === "blob" && <BlobBackground animate={state.motionEnabled} />}
@@ -664,8 +670,8 @@ export default function Home() {
                   </details>
                   <div className="panel-title-row"><span className="panel-title">Background</span><span className="panel-overline">{state.backgroundMode}</span></div>
                   <button ref={backgroundPickerTriggerRef} type="button" className="background-picker-trigger" aria-haspopup="dialog" aria-expanded={backgroundPickerOpen} aria-controls="background-picker-panel" onClick={openBackgroundPicker}>
-                    <span className="background-picker-thumb" style={{ background: state.backgroundMode === "shader" ? "linear-gradient(135deg, #73bfc4, #ff810a, #8da0ce)" : state.backgroundMode === "blob" ? "radial-gradient(circle at 50% 50%, #2cb978 0 36%, #22ff7e 70%)" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? `linear-gradient(135deg, ${activeSavedMesh.design.colors.join(", ")})` : state.backgroundMode === "solid" ? state.solidColor : state.backgroundMode === "image" && state.backgroundImageUrl ? `url(${state.backgroundImageUrl}) center / cover` : backgroundGradientCss }} />
-                    <span className="background-picker-copy"><strong>Choose a background</strong><small>{state.backgroundMode === "shader" ? "Shader sphere · live motion" : state.backgroundMode === "blob" ? "Living blob · live motion" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? activeSavedMesh.name : state.backgroundMode === "image" ? "Custom image" : state.backgroundMode === "solid" ? state.solidColor : state.gradientId === "custom" ? "Custom gradient" : activeGradient.name}</small></span><ChevronDown size={14} />
+                    <span className="background-picker-thumb" style={{ background: state.backgroundMode === "shader" ? "linear-gradient(135deg, #73bfc4, #ff810a, #8da0ce)" : state.backgroundMode === "blob" ? "radial-gradient(circle at 50% 50%, #2cb978 0 36%, #22ff7e 70%)" : state.backgroundMode === "mesh" && state.motionPreset === "silk" ? "linear-gradient(130deg, #050505 9%, #d8d8d8 20%, #151515 29% 38%, #aaa 45%, #090909 55% 66%, #ddd 75%, #080808 88%)" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? `linear-gradient(135deg, ${activeSavedMesh.design.colors.join(", ")})` : state.backgroundMode === "solid" ? state.solidColor : state.backgroundMode === "image" && state.backgroundImageUrl ? `url(${state.backgroundImageUrl}) center / cover` : backgroundGradientCss }} />
+                    <span className="background-picker-copy"><strong>Choose a background</strong><small>{state.backgroundMode === "shader" ? "Shader sphere · live motion" : state.backgroundMode === "blob" ? "Living blob · live motion" : state.backgroundMode === "mesh" && state.motionPreset === "silk" ? "Mono silk · live motion" : state.backgroundMode === "saved-mesh" && activeSavedMesh ? activeSavedMesh.name : state.backgroundMode === "image" ? "Custom image" : state.backgroundMode === "solid" ? state.solidColor : state.gradientId === "custom" ? "Custom gradient" : activeGradient.name}</small></span><ChevronDown size={14} />
                   </button>
                 </>}
 
@@ -673,9 +679,9 @@ export default function Home() {
                   <div className="panel-title-row"><span className="panel-title">Animated backgrounds</span><span className="panel-overline">BUILT IN + SAVED</span></div>
                   <p className="looks-intro">Choose a moving backdrop for your screenshot or clip. Your media stays crisp on top.</p>
                   <div className="motion-grid">
-                    <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "shader"} onClick={() => update("backgroundMode", "shader")}><span className="motion-swatch shader-sphere" /><strong>Shader sphere</strong><small>Teal · orange · periwinkle</small></button>
-                    <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "blob"} onClick={() => update("backgroundMode", "blob")}><span className="motion-swatch green-blob" /><strong>Green blob</strong><small>Noise-deformed Perlin sphere</small></button>
-                    <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "mesh" && state.motionPreset === "silk"} onClick={() => { update("motionPreset", "silk"); update("backgroundMode", "mesh"); }}><span className="motion-swatch silk" /><strong>Mono silk</strong><small>Black, silver &amp; flowing light</small></button>
+                    <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "shader"} onClick={() => useEditorStore.setState({ backgroundMode: "shader", savedMeshDesignId: "", motionEnabled: true })}><span className="motion-swatch shader-sphere" /><strong>Shader sphere</strong><small>Teal · orange · periwinkle</small></button>
+                    <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "blob"} onClick={() => useEditorStore.setState({ backgroundMode: "blob", savedMeshDesignId: "", motionEnabled: true })}><span className="motion-swatch green-blob" /><strong>Green blob</strong><small>Noise-deformed Perlin sphere</small></button>
+                    <button className="motion-card" type="button" aria-pressed={state.backgroundMode === "mesh" && state.motionPreset === "silk"} onClick={() => { useEditorStore.setState({ motionPreset: "silk", backgroundMode: "mesh", savedMeshDesignId: "", motionEnabled: true }); }}><span className="motion-swatch silk" /><strong>Mono silk</strong><small>Black, silver &amp; flowing light</small></button>
                   </div>
                   <div className="panel-divider">Mesh Lab designs</div>
                   {savedMeshGradients.length > 0 ? <div className="motion-grid saved-motion-grid">{savedMeshGradients.map((entry) => <button key={entry.id} className="motion-card" type="button" aria-pressed={state.backgroundMode === "saved-mesh" && state.savedMeshDesignId === entry.id} onClick={() => applySavedMeshGradient(entry)}><span className="motion-swatch saved-mesh-swatch" style={{ background: `linear-gradient(135deg, ${entry.design.colors.join(", ")})` }} /><strong>{entry.name}</strong><small>Mesh Lab · {entry.design.colors.length} colors</small></button>)}</div> : <div className="saved-mesh-empty"><p className="small-note">Save a mesh gradient to use it as a motion background.</p><a href="/mesh-gradient-builder"><Sparkles size={13} /> Open Mesh Lab</a></div>}
