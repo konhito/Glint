@@ -296,6 +296,8 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
   const framePadding = state.frame === "arc" ? Math.max(10, Math.round(Math.min(width, height) * 0.02)) : 0;
   const cardWidth = image.width + (inset + framePadding) * 2;
   const cardHeight = image.height + (inset + framePadding) * 2 + header;
+  const imageRadius = Math.min(state.radius, image.width / 2, image.height / 2);
+  const insetRadius = Math.min(imageRadius + inset, (image.width + inset * 2) / 2, (image.height + inset * 2) / 2);
   const marginX = width * 0.04;
   const marginY = height * 0.04;
   const horizontal = state.position.endsWith("left") || state.position === "left" ? marginX + cardWidth / 2 : state.position.endsWith("right") || state.position === "right" ? width - marginX - cardWidth / 2 : width / 2;
@@ -325,7 +327,7 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
   ctx.shadowOffsetY = offset;
   const surface = state.frame === "none" ? state.insetColor : state.frame === "arc" ? "#f5f4ef" : state.frame === "silver-back" ? "#bfc1c7" : state.frame === "eclipse" ? "#08090d" : state.frame === "shadow-back" ? "#4e4e52" : darkFrames.includes(state.frame) ? "#17181c" : state.frame === "emotion" ? "#f8d6e4" : "#f2f1ed";
   ctx.fillStyle = surface;
-  ctx.beginPath(); ctx.roundRect(left, top, cardWidth, cardHeight, state.frame === "none" ? Math.max(state.radius, inset) : radius); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(left, top, cardWidth, cardHeight, state.frame === "none" ? insetRadius : radius); ctx.fill();
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
@@ -341,7 +343,7 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
     const bodyWidth = cardWidth - framePadding * 2;
     const bodyHeight = image.height + inset * 2;
     ctx.save();
-    ctx.beginPath(); ctx.roundRect(bodyX, bodyY, bodyWidth, bodyHeight, state.frame === "arc" ? Math.max(0, radius - framePadding) : radius); ctx.clip();
+    ctx.beginPath(); ctx.roundRect(bodyX, bodyY, bodyWidth, bodyHeight, insetRadius); ctx.clip();
     if (state.insetStyle === "glass") {
       // Blur only the captured background; the uploaded media is drawn sharply below.
       if (backdrop) {
@@ -359,7 +361,7 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
       ctx.fillRect(bodyX, bodyY, bodyWidth, bodyHeight);
       ctx.strokeStyle = "rgba(255,255,255,0.48)";
       ctx.lineWidth = Math.max(1, Math.round(Math.min(width, height) / 700));
-      ctx.beginPath(); ctx.roundRect(bodyX + 0.5, bodyY + 0.5, bodyWidth - 1, bodyHeight - 1, radius); ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(bodyX + 0.5, bodyY + 0.5, bodyWidth - 1, bodyHeight - 1, insetRadius); ctx.stroke();
     } else {
       ctx.fillStyle = state.insetColor;
       ctx.fillRect(left, bodyY, cardWidth, bodyHeight);
@@ -372,7 +374,7 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
   const x = left + framePadding + inset;
   const y = top + header + framePadding + inset;
   ctx.beginPath();
-  ctx.roundRect(x, y, image.width, image.height, Math.min(state.radius, image.width / 2, image.height / 2));
+  ctx.roundRect(x, y, image.width, image.height, imageRadius);
   ctx.clip();
   // Imported pixels are drawn after every background treatment and are never grained or patterned over.
   ctx.drawImage(source, x, y, image.width, image.height);
