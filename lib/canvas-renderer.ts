@@ -347,9 +347,11 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
     if (state.insetStyle === "glass") {
       // Blur only the captured background; the uploaded media is drawn sharply below.
       if (backdrop) {
+        ctx.save();
+        ctx.setTransform(ctx.canvas.width / width, 0, 0, ctx.canvas.height / height, 0, 0);
         ctx.filter = `blur(${Math.max(7, Math.round(Math.min(width, height) * 0.018))}px)`;
-        ctx.drawImage(backdrop, 0, 0);
-        ctx.filter = "none";
+        ctx.drawImage(backdrop, 0, 0, width, height);
+        ctx.restore();
       }
       ctx.fillStyle = rgba(state.insetColor, 0.22);
       ctx.fillRect(bodyX, bodyY, bodyWidth, bodyHeight);

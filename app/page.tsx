@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { cssForGradient, GRADIENTS, MOODS, OUTPUT_PRESETS } from "@/lib/gradients";
 import { rankGradientsForMedia } from "@/lib/gradient-match";
 import { EXPORT_PIXEL_RATIO, renderCanvas } from "@/lib/canvas-renderer";
-import { useEditorStore, type EditorState, type WindowFrame } from "@/lib/editor-store";
+import { DEFAULT_EDITOR, useEditorStore, type EditorState, type WindowFrame } from "@/lib/editor-store";
 import { MESH_GRADIENT_STORAGE_KEY, readSavedMeshGradients, type SavedMeshGradient } from "@/lib/mesh-designs";
 import { recordCanvasVideo } from "@/lib/video-export";
 import { renderCanvasGif } from "@/lib/gif-export";
@@ -324,7 +324,7 @@ export default function Home() {
         const url = URL.createObjectURL(file);
         sourceObjectUrl.current = url;
         imageRef.current = null;
-        useEditorStore.setState({ sourceUrl: url, sourceKind: "video", sourceName: file.name, sourceDuration: 0 });
+        useEditorStore.setState({ sourceUrl: url, sourceKind: "video", sourceName: file.name, sourceDuration: 0, scale: DEFAULT_EDITOR.scale });
         setVideoPaused(true);
       } else {
         const dataUrl = await readAsDataUrl(file);
@@ -343,7 +343,7 @@ export default function Home() {
         imageRef.current = finalUrl === dataUrl ? image : await imageFromUrl(finalUrl);
         if (sourceObjectUrl.current) URL.revokeObjectURL(sourceObjectUrl.current);
         sourceObjectUrl.current = "";
-        useEditorStore.setState({ sourceUrl: finalUrl, sourceKind: "image", sourceName: file.name, sourceDuration: 0 });
+        useEditorStore.setState({ sourceUrl: finalUrl, sourceKind: "image", sourceName: file.name, sourceDuration: 0, scale: DEFAULT_EDITOR.scale });
       }
       notify("Added to your canvas — your file stays on this device.");
     } catch (error) {
@@ -356,7 +356,7 @@ export default function Home() {
       const image = await imageFromUrl("/sample-screen.svg");
       clearRenders();
       imageRef.current = image;
-      useEditorStore.setState({ sourceUrl: "/sample-screen.svg", sourceKind: "image", sourceName: "sample-screen.svg", sourceDuration: 0 });
+      useEditorStore.setState({ sourceUrl: "/sample-screen.svg", sourceKind: "image", sourceName: "sample-screen.svg", sourceDuration: 0, scale: DEFAULT_EDITOR.scale });
       notify("Demo screenshot added.");
     } catch {
       notify("Could not load the demo image.");
