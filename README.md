@@ -2,6 +2,10 @@
 
 Glint is a local-first editor for turning screenshots and clips into polished, social-ready visuals. Add media from your device, shape the canvas, choose a background, and export from your browser.
 
+<p align="center">
+  <img src="https://i.giphy.com/GQB0YbOgtknHhnfPCr.webp" alt="Toshi says BANG" width="220" />
+</p>
+
 ## Features
 
 - Add images or video by file picker, drag and drop, or paste from the clipboard.
