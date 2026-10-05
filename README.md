@@ -11,7 +11,7 @@ Glint is a local-first editor for turning screenshots and clips into polished, s
 - Add images or video by file picker, drag and drop, or paste from the clipboard.
 - Style screenshots with frames, rounded corners, borders, shadows, tilt, and position controls.
 - Build a backdrop with gradients, mesh colors, textures, and motion.
-- Export images as PNG, create looping GIFs from images, or render video in four sizes.
+- Export sharp 2× PNGs, create looping GIFs, or render video at 2× in one chosen size.
 - Save reusable designs in this browser, or use the Mesh Lab to share a gradient link.
 
 Imported media is processed in the browser and stays on your device during editing.

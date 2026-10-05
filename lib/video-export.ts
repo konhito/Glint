@@ -25,6 +25,7 @@ export async function recordCanvasVideo(
   preset: OutputPreset,
   onProgress: (seconds: number) => void,
   shaderCanvas: HTMLCanvasElement | null = null,
+  pixelRatio = 1,
 ) {
   if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
     throw new Error("This browser cannot record canvas video. Try the latest Chrome or Firefox.");
@@ -37,7 +38,7 @@ export async function recordCanvasVideo(
   video.loop = false;
   const wasMuted = video.muted;
   await seekToStart(video);
-  renderCanvas(canvas, state, video, backgroundImage, preset.width, preset.height, 0, undefined, shaderCanvas);
+  renderCanvas(canvas, state, video, backgroundImage, preset.width, preset.height, 0, undefined, shaderCanvas, pixelRatio);
 
   const stream = canvas.captureStream(30);
   const captureVideo = video as HTMLVideoElement & { captureStream?: () => MediaStream };
@@ -45,7 +46,8 @@ export async function recordCanvasVideo(
   capturedMedia?.getAudioTracks().forEach((track: MediaStreamTrack) => stream.addTrack(track));
   const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]
     .find((type) => MediaRecorder.isTypeSupported(type));
-  const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  const videoBitsPerSecond = Math.min(35_000_000, Math.max(16_000_000, Math.round(canvas.width * canvas.height * 7)));
+  const recorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond, audioBitsPerSecond: 192_000 });
   const chunks: BlobPart[] = [];
   let lastSecond = -1;
   const onTimeUpdate = () => {
@@ -78,12 +80,12 @@ export async function recordCanvasVideo(
     video.muted = false;
     await video.play();
     const draw = () => {
-      renderCanvas(canvas, state, video, backgroundImage, preset.width, preset.height, (performance.now() - startedAt) / 1000, undefined, shaderCanvas);
+      renderCanvas(canvas, state, video, backgroundImage, preset.width, preset.height, (performance.now() - startedAt) / 1000, undefined, shaderCanvas, pixelRatio);
       if (!video.paused && !video.ended) frame = requestAnimationFrame(draw);
     };
     draw();
     await Promise.race([ended, recording.then(() => { throw new Error("The video recorder stopped unexpectedly."); })]);
-    renderCanvas(canvas, state, video, backgroundImage, preset.width, preset.height, 0, undefined, shaderCanvas);
+    renderCanvas(canvas, state, video, backgroundImage, preset.width, preset.height, 0, undefined, shaderCanvas, pixelRatio);
     if (recorder.state !== "inactive") recorder.stop();
     return await recording;
   } catch (error) {

@@ -7,6 +7,7 @@ let glassBackdrop: HTMLCanvasElement | null = null;
 let effectBackdrop: HTMLCanvasElement | null = null;
 type ImageSource = HTMLImageElement | HTMLVideoElement;
 type Pointer = { x: number; y: number };
+export const EXPORT_PIXEL_RATIO = 2;
 
 function rgba(hex: string, alpha: number): string {
   const value = hex.replace("#", "");
@@ -72,8 +73,8 @@ function drawMesh(ctx: CanvasRenderingContext2D, colors: string[], width: number
 
 function drawBackground(ctx: CanvasRenderingContext2D, state: EditorState, backgroundImage: HTMLImageElement | null, backgroundSceneCanvas: HTMLCanvasElement | null, width: number, height: number, time: number, pointer: Pointer) {
   const preset = state.gradientId === "custom" ? { kind: "linear" as const, colors: state.customGradientColors } : GRADIENTS.find((item) => item.id === state.gradientId) ?? GRADIENTS[0];
-  if (state.backgroundMode === "shader" || state.backgroundMode === "blob") {
-    ctx.fillStyle = state.backgroundMode === "blob" ? "#22ff7e" : "#10191c";
+  if (state.backgroundMode === "shader" || state.backgroundMode === "blob" || state.backgroundMode === "saved-mesh") {
+    ctx.fillStyle = state.backgroundMode === "blob" ? "#22ff7e" : state.backgroundMode === "saved-mesh" ? "#15131b" : "#10191c";
     ctx.fillRect(0, 0, width, height);
     if (backgroundSceneCanvas?.width && backgroundSceneCanvas.height) ctx.drawImage(backgroundSceneCanvas, 0, 0, width, height);
   } else if (state.backgroundMode === "solid") {
@@ -115,7 +116,7 @@ function drawBackgroundEffect(ctx: CanvasRenderingContext2D, state: EditorState,
     effectBackdrop ??= document.createElement("canvas");
     if (effectBackdrop.width !== width) effectBackdrop.width = width;
     if (effectBackdrop.height !== height) effectBackdrop.height = height;
-    effectBackdrop.getContext("2d")?.drawImage(ctx.canvas, 0, 0);
+    effectBackdrop.getContext("2d")?.drawImage(ctx.canvas, 0, 0, width, height);
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.filter = `blur(${radius}px)`;
@@ -264,15 +265,9 @@ function drawHeader(ctx: CanvasRenderingContext2D, frame: WindowFrame, x: number
       ctx.beginPath(); ctx.fillStyle = color;
       ctx.arc(x + height * (0.38 + index * 0.39), y + height / 2, Math.max(2.4, height * 0.11), 0, Math.PI * 2); ctx.fill();
     });
-    if (frame === "mac-adaptive" || frame === "mac-subtle") {
-      ctx.fillStyle = "#77777a"; ctx.font = `600 ${Math.max(8, height * 0.25)}px Arial`; ctx.textAlign = "center";
-      ctx.fillText("preview.local", x + width / 2, y + height * 0.61);
-    }
   } else if (frame === "browser" || frame === "shortboard") {
     ctx.fillStyle = dark ? "#34353a" : "#e4e3e0";
     ctx.beginPath(); ctx.roundRect(x + width * 0.23, y + height * 0.2, width * 0.56, height * 0.62, height * 0.23); ctx.fill();
-    ctx.fillStyle = dark ? "#dad9df" : "#69676b"; ctx.font = `${Math.max(8, height * 0.24)}px Arial`; ctx.textAlign = "center";
-    ctx.fillText(frame === "shortboard" ? "●  preview.local" : "preview.local", x + width / 2, y + height * 0.6);
   } else if (frame === "windows-light" || frame === "windows-dark") {
     ctx.strokeStyle = dark ? "#c9c8cc" : "#58575b"; ctx.lineWidth = Math.max(1, height * 0.035);
     [width - height * 1.05, width - height * 0.69, width - height * 0.34].forEach((offset, index) => {
@@ -384,11 +379,12 @@ function drawSource(ctx: CanvasRenderingContext2D, state: EditorState, source: I
   ctx.restore();
 }
 
-export function renderCanvas(canvas: HTMLCanvasElement, state: EditorState, source: ImageSource | null, backgroundImage: HTMLImageElement | null, width: number, height: number, time = 0, pointer: Pointer = { x: 0.5, y: 0.5 }, backgroundSceneCanvas: HTMLCanvasElement | null = null) {
-  if (canvas.width !== width) canvas.width = width;
-  if (canvas.height !== height) canvas.height = height;
+export function renderCanvas(canvas: HTMLCanvasElement, state: EditorState, source: ImageSource | null, backgroundImage: HTMLImageElement | null, width: number, height: number, time = 0, pointer: Pointer = { x: 0.5, y: 0.5 }, backgroundSceneCanvas: HTMLCanvasElement | null = null, pixelRatio = 1) {
+  if (canvas.width !== width * pixelRatio) canvas.width = width * pixelRatio;
+  if (canvas.height !== height * pixelRatio) canvas.height = height * pixelRatio;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   drawBackground(ctx, state, backgroundImage, backgroundSceneCanvas, width, height, time, pointer);
@@ -407,7 +403,7 @@ export function renderCanvas(canvas: HTMLCanvasElement, state: EditorState, sour
       glassBackdrop ??= document.createElement("canvas");
       if (glassBackdrop.width !== width) glassBackdrop.width = width;
       if (glassBackdrop.height !== height) glassBackdrop.height = height;
-      glassBackdrop.getContext("2d")?.drawImage(canvas, 0, 0);
+      glassBackdrop.getContext("2d")?.drawImage(canvas, 0, 0, width, height);
       backdrop = glassBackdrop;
     }
     drawSource(ctx, state, source, backdrop, width, height);

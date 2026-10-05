@@ -1,36 +1,21 @@
 "use client";
 
 import { MeshGradient } from "@paper-design/shaders-react";
-import { ArrowLeft, BookmarkPlus, Check, Copy, Trash2 } from "lucide-react";
+import { ArrowLeft, BookmarkPlus, Check, Copy, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { cloneMeshGradientDesign, isMeshGradientDesign, MESH_GRADIENT_STORAGE_KEY, readSavedMeshGradients, type MeshGradientDesign as Design, type SavedMeshGradient as SavedDesign } from "@/lib/mesh-designs";
 import "./mesh-gradient-builder.css";
 
-type Design = {
-  colors: string[];
-  distortion: number;
-  swirl: number;
-  grainMixer: number;
-  grainOverlay: number;
-  speed: number;
-  scale: number;
-  rotation: number;
-  offsetX: number;
-  offsetY: number;
-};
-
-type SavedDesign = { id: string; name: string; design: Design };
-
-const STORAGE_KEY = "neo.mesh-gradient.designs.v1";
 const INITIAL: Design = {
-  colors: ["#aaa7d7", "#3b2a8d"], distortion: 1, swirl: 1, grainMixer: 1,
-  grainOverlay: 1, speed: 0.6, scale: 1, rotation: 232, offsetX: -1, offsetY: -0.02,
+  colors: ["#bcecf6", "#8da0ce", "#aaa7d7"], distortion: 0.45, swirl: 0.22, grainMixer: 0,
+  grainOverlay: 0, speed: 0.25, scale: 1, rotation: 0, offsetX: 0, offsetY: 0,
 };
 const PALETTE = ["#aaa7d7", "#3b2a8d", "#f0a6ca", "#ff810a", "#73bfc4", "#8da0ce", "#ffe457", "#17202a", "#ff82c2", "#bcecf6"];
 const PRESETS: { name: string; design: Design }[] = [
   { name: "Default", design: INITIAL },
   { name: "Ink", design: { ...INITIAL, colors: ["#ffffff", "#000000"], swirl: 0.2, grainMixer: 0, grainOverlay: 0, speed: 1, rotation: 90, offsetX: 0, offsetY: 0 } },
-  { name: "Purple", design: { ...INITIAL, grainMixer: 0, grainOverlay: 0, rotation: 0, offsetX: 0, offsetY: 0 } },
+  { name: "Purple", design: { ...INITIAL, colors: ["#aaa7d7", "#3b2a8d"], distortion: 0.72, swirl: 0.55, grainMixer: 0, grainOverlay: 0, speed: 0.32, rotation: 232, offsetX: -0.15, offsetY: -0.02 } },
   { name: "Beach", design: { ...INITIAL, colors: ["#bcecf6", "#00aaff", "#00f7ff", "#ffd447"], distortion: 0.8, swirl: 0.35, grainMixer: 0, grainOverlay: 0, speed: 0.1, rotation: 0, offsetX: 0, offsetY: 0 } },
 ];
 
@@ -39,23 +24,6 @@ const limits: [keyof Omit<Design, "colors">, number, number, number][] = [
   ["grainOverlay", 0, 1, 2], ["speed", 0, 1, 2], ["scale", 0.01, 4, 2],
   ["rotation", 0, 360, 0], ["offsetX", -1, 1, 2], ["offsetY", -1, 1, 2],
 ];
-
-function isDesign(value: unknown): value is Design {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return Array.isArray(item.colors) && item.colors.length >= 2 && item.colors.length <= 10
-    && item.colors.every((color) => typeof color === "string" && /^#[\da-f]{6}$/i.test(color))
-    && limits.every(([key, min, max]) => typeof item[key] === "number" && Number.isFinite(item[key]) && (item[key] as number) >= min && (item[key] as number) <= max);
-}
-
-function readSavedDesigns(): SavedDesign[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((item): item is SavedDesign => item && typeof item.id === "string" && typeof item.name === "string" && isDesign(item.design)) : [];
-  } catch {
-    return [];
-  }
-}
 
 function Slider({ name, value, min, max, step = 0.01, digits = 2, onChange }: {
   name: keyof Omit<Design, "colors">; value: number; min: number; max: number;
@@ -70,18 +38,19 @@ function Slider({ name, value, min, max, step = 0.01, digits = 2, onChange }: {
 }
 
 export default function MeshGradientBuilder() {
-  const [design, setDesign] = useState<Design>(INITIAL);
+  const [design, setDesign] = useState<Design>(() => cloneMeshGradientDesign(INITIAL));
   const [saved, setSaved] = useState<SavedDesign[]>([]);
   const [name, setName] = useState("");
   const [status, setStatus] = useState("");
+  const activePreset = PRESETS.find((preset) => JSON.stringify(preset.design) === JSON.stringify(design))?.name;
 
   useEffect(() => {
-    setSaved(readSavedDesigns());
+    setSaved(readSavedMeshGradients());
     const encoded = new URLSearchParams(window.location.search).get("design");
     if (encoded) {
       try {
         const shared: unknown = JSON.parse(atob(encoded));
-        if (isDesign(shared)) setDesign(shared);
+        if (isMeshGradientDesign(shared)) setDesign(cloneMeshGradientDesign(shared));
       } catch { /* Ignore malformed shared settings. */ }
     }
   }, []);
@@ -90,11 +59,20 @@ export default function MeshGradientBuilder() {
     setDesign((current) => ({ ...current, [key]: value }));
   }
 
+  function resetDesign() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("design")) {
+      url.searchParams.delete("design");
+      window.history.replaceState(window.history.state, "", url);
+    }
+    setDesign(cloneMeshGradientDesign(INITIAL));
+  }
+
   function saveDesign() {
     const entry = { id: crypto.randomUUID(), name: name.trim().slice(0, 48) || `Gradient ${saved.length + 1}`, design: { ...design, colors: [...design.colors] } };
     const next = [entry, ...saved];
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(MESH_GRADIENT_STORAGE_KEY, JSON.stringify(next));
       setSaved(next);
       setName("");
       setStatus("Saved on this device");
@@ -107,7 +85,7 @@ export default function MeshGradientBuilder() {
   function removeDesign(id: string) {
     const next = saved.filter((entry) => entry.id !== id);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(MESH_GRADIENT_STORAGE_KEY, JSON.stringify(next));
       setSaved(next);
     } catch {
       setStatus("Could not update local designs");
@@ -138,7 +116,7 @@ export default function MeshGradientBuilder() {
     </header>
 
     <div className="mesh-builder-content">
-      <div className="mesh-page-title"><h1>mesh gradient</h1><div className="mesh-page-actions"><button type="button" onClick={() => void copyLink()}><Copy size={14} /> copy link</button><Link href="/">open editor <ArrowLeft size={13} /></Link></div></div>
+      <div className="mesh-page-title"><h1>Mesh Gradient</h1><div className="mesh-page-actions"><button className="mesh-reset-button" type="button" aria-label="Reset to default settings" title="Reset to default settings" onClick={resetDesign}><RotateCcw size={14} /><span>Reset</span></button><button type="button" onClick={() => void copyLink()}><Copy size={14} /> copy link</button><Link href="/">open editor <ArrowLeft size={13} /></Link></div></div>
 
       <div className="mesh-builder-layout">
         <section className="mesh-preview" aria-label="Live mesh gradient preview">
@@ -147,7 +125,7 @@ export default function MeshGradientBuilder() {
 
         <aside className="mesh-controls" aria-label="Mesh gradient settings">
           <div className="mesh-section-label">Presets</div>
-          <div className="mesh-preset-grid">{PRESETS.map((preset) => <button type="button" key={preset.name} onClick={() => setDesign({ ...preset.design, colors: [...preset.design.colors] })}>{preset.name}</button>)}</div>
+          <div className="mesh-preset-grid">{PRESETS.map((preset) => <button type="button" key={preset.name} aria-pressed={activePreset === preset.name} onClick={() => setDesign(cloneMeshGradientDesign(preset.design))}>{preset.name}</button>)}</div>
           <div className="mesh-color-count mesh-control-row"><label htmlFor="mesh-color-count">colorCount</label><input id="mesh-color-count" type="range" min="2" max="10" step="1" value={design.colors.length} onChange={(event) => setColorCount(Number(event.target.value))} /><output htmlFor="mesh-color-count">{design.colors.length}</output></div>
           {design.colors.map((color, index) => <label className="mesh-color-row" key={index}><span>color{index + 1}</span><input aria-label={`color${index + 1}`} type="color" value={color} onChange={(event) => setDesign((current) => ({ ...current, colors: current.colors.map((item, colorIndex) => colorIndex === index ? event.target.value : item) }))} /><output>{color}</output></label>)}
           {limits.map(([key, min, max, digits]) => <Slider key={key} name={key} value={design[key]} min={min} max={max} digits={digits} onChange={(value) => setValue(key, value)} />)}
@@ -159,6 +137,7 @@ export default function MeshGradientBuilder() {
           </div>
         </aside>
       </div>
+      <footer className="mesh-credit-footer"><a className="creator-credit" href="https://github.com/konhito" target="_blank" rel="noopener noreferrer">Made by <strong>konhito</strong><span aria-hidden="true">↗</span></a></footer>
     </div>
     {status && <div className="mesh-status" role="status"><Check size={14} />{status}</div>}
   </main>;
