@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cssForGradient, GRADIENTS, MOODS, OUTPUT_PRESETS } from "@/lib/gradients";
+import { rankGradientsForMedia } from "@/lib/gradient-match";
 import { EXPORT_PIXEL_RATIO, renderCanvas } from "@/lib/canvas-renderer";
 import { useEditorStore, type EditorState, type WindowFrame } from "@/lib/editor-store";
 import { MESH_GRADIENT_STORAGE_KEY, readSavedMeshGradients, type SavedMeshGradient } from "@/lib/mesh-designs";
@@ -471,9 +472,13 @@ export default function Home() {
   }
 
   function shuffleDesign() {
-    const gradients = GRADIENTS.filter((gradient) => gradient.id !== state.gradientId);
+    const source = state.sourceKind === "video" ? videoRef.current : imageRef.current;
+    if (!source) return notify("Wait for your media to load before shuffling.");
+    const gradients = rankGradientsForMedia(source, GRADIENTS).slice(0, 6);
+    if (!gradients.length) return notify("Could not read colors from this media yet.");
+    const currentIndex = gradients.findIndex((gradient) => gradient.id === state.gradientId);
     const availablePatterns = shufflePatterns.filter((pattern) => pattern !== state.pattern);
-    chooseGradient(gradients[Math.floor(Math.random() * gradients.length)].id);
+    chooseGradient(gradients[(currentIndex + 1) % gradients.length].id);
     update("pattern", availablePatterns[Math.floor(Math.random() * availablePatterns.length)]);
     update("patternSeed", state.patternSeed + Math.floor(Math.random() * 10) + 1);
   }
@@ -568,7 +573,7 @@ export default function Home() {
             </div>
             {state.sourceUrl && <div className="toolbar-actions">
               <Button variant="secondary" size="sm" onClick={() => pickerRef.current?.click()}><Plus size={14} /> Add media</Button>
-              <Button variant="default" size="sm" onClick={shuffleDesign}><WandSparkles size={14} /> Shuffle</Button>
+              <Button variant="default" size="sm" onClick={shuffleDesign} title="Match a gradient to colors in your media"><WandSparkles size={14} /> Smart shuffle</Button>
             </div>}
           </div>
 
